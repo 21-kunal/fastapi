@@ -1,18 +1,14 @@
 from fastapi import FastAPI, Response, status, HTTPException, Depends
-from pydantic import BaseModel
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
 from sqlalchemy.orm import Session
 
-
-from . import models
-from . import schemas
+from . import utils,models,schemas
 from .database import engine, get_db
-
+from typing import List
 
 models.Base.metadata.create_all(bind=engine)
-
 
 app = FastAPI()
 
@@ -40,15 +36,15 @@ async def root():
     return {"msg": "Hello!!"}
 
 
-@app.get("/posts")
+@app.get("/posts", response_model=List[schemas.Post])
 async def get_posts(db: Session = Depends(get_db)):
     # cursor.execute("SELECT * FROM posts;")
     # posts = cursor.fetchall()
     posts = db.query(models.Post).all()
-    return {"data": posts}
+    return  posts
 
 
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
+@app.post("/posts", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
 async def createPost(post: schemas.PostCreate, db: Session = Depends(get_db)):
     # cursor.execute("INSERT INTO posts ( title, content, published ) VALUES ( %s, %s, %s) RETURNING *;"
     #                ,(post.title,post.content,post.published))
@@ -60,10 +56,10 @@ async def createPost(post: schemas.PostCreate, db: Session = Depends(get_db)):
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
-    return {"data ": new_post}
+    return  new_post
 
 
-@app.get("/posts/{id}")
+@app.get("/posts/{id}", response_model=schemas.Post)
 async def get_post(id: int, db: Session = Depends(get_db)):
     # cursor.execute("SELECT * FROM posts WHERE id = %s;", (id,))
     # post = cursor.fetchone()
@@ -74,7 +70,7 @@ async def get_post(id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Post with id: {id} was not found!",
         )
-    return {"data": post}
+    return  post
 
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -98,7 +94,7 @@ async def delete_post(id: int, db: Session = Depends(get_db)):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@app.put("/posts/{id}")
+@app.put("/posts/{id}", response_model=schemas.Post)
 async def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)):
 
     # cursor.execute(
@@ -121,4 +117,31 @@ async def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(g
 
     update_post_query.update(post.model_dump())
     db.commit()
-    return {"Updated Post": update_post_query.first()}
+    return update_post_query.first()
+
+@app.post("/users", status_code=status.HTTP_201_CREATED, response_model=schemas.UserOut)
+def create_user( user: schemas.UserCreate ,db: Session = Depends(get_db)):
+
+    hashed_password = utils.pwd_context.hash(user.password)
+    user.password = hashed_password
+
+    user_dict = user.model_dump()
+    new_user = models.User(**user_dict)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
+
+
+@app.get("/users/{id}", response_model=schemas.UserOut)
+def get_user(id: int, db: Session = Depends(get_db)):
+
+    user = db.query(models.User).filter(models.User.id == id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id: {id} was not found!",
+        )
+    return  user
