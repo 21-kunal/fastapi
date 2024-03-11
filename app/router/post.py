@@ -33,7 +33,7 @@ async def create_post(
 
     # conn.commit()
 
-    new_post = models.Post(**post.model_dump())
+    new_post = models.Post(user_id=current_user.id, **post.model_dump())
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
@@ -69,11 +69,18 @@ async def delete_post(
     # post = cursor.fetchone()
 
     delete_post_query = db.query(models.Post).filter(models.Post.id == id)
+    post = delete_post_query.first()
 
-    if delete_post_query.first() == None:
+    if post == None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Post with this id: {id} is not found",
+        )
+
+    if post.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not Authorized to perform this operation",
         )
 
     # conn.commit()
@@ -86,7 +93,7 @@ async def delete_post(
 @router.put("/{id}", response_model=schemas.Post)
 async def update_post(
     id: int,
-    post: schemas.PostCreate,
+    new_post: schemas.PostCreate,
     db: Session = Depends(get_db),
     current_user=Depends(oauth2.get_current_user),
 ):
@@ -100,15 +107,23 @@ async def update_post(
     # updated_post = cursor.fetchone()
 
     update_post_query = db.query(models.Post).filter(models.Post.id == id)
+    post = update_post_query.first()
 
-    if update_post_query.first() == None:
+    if post == None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Post with this id: {id} is not found",
         )
 
+    if post.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not Authorized to perform this operation",
+        )
+
     # conn.commit()
 
-    update_post_query.update(post.model_dump())
+    update_post_query.update(new_post.model_dump())
     db.commit()
+
     return update_post_query.first()
