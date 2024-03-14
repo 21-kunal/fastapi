@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -10,7 +11,7 @@ from ..database import get_db
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
-@router.get("/", response_model=List[schemas.Post])
+@router.get("/", response_model=List[schemas.PostOut])
 async def get_posts(
     search: Optional[str] = "",
     limit: int = 10,
@@ -21,14 +22,24 @@ async def get_posts(
     # cursor.execute("SELECT * FROM posts;")
     # posts = cursor.fetchall()
 
-    posts = (
-        db.query(models.Post)
+    # posts = (
+    #     db.query(models.Post)
+    #     .filter(models.Post.title.contains(search))
+    #     .limit(limit)
+    #     .offset(skip)
+    #     .all()
+    # )
+
+    posts_with_vote = (
+        db.query(models.Post, func.count(models.Vote.post_id).label("votes"))
+        .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
+        .group_by(models.Post.id)
         .filter(models.Post.title.contains(search))
         .limit(limit)
         .offset(skip)
         .all()
     )
-    return posts
+    return posts_with_vote
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
@@ -50,7 +61,7 @@ async def create_post(
     return new_post
 
 
-@router.get("/{id}", response_model=schemas.Post)
+@router.get("/{id}", response_model=schemas.PostOut)
 async def get_post(
     id: int,
     db: Session = Depends(get_db),
@@ -58,14 +69,21 @@ async def get_post(
 ):
     # cursor.execute("SELECT * FROM posts WHERE id = %s;", (id,))
     # post = cursor.fetchone()
-    post = db.query(models.Post).filter(models.Post.id == id).first()
+    # post = db.query(models.Post).filter(models.Post.id == id).first()
+    post_with_vote = (
+        db.query(models.Post, func.count(models.Vote.post_id).label("votes"))
+        .join(models.Vote, models.Vote.post_id == models.Post.id, isouter=True)
+        .group_by(models.Post.id)
+        .filter(models.Post.id == id)
+        .first()
+    )
 
-    if not post:
+    if not post_with_vote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Post with id: {id} was not found!",
         )
-    return post
+    return post_with_vote
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
