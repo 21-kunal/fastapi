@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from .. import database, models, oauth2, schemas, utils
+import database, models, oauth2, schemas, utils
 
 router = APIRouter(tags=["Authentication"])
 

@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from .. import models, oauth2, schemas
-from ..database import get_db
+import models, oauth2, schemas
+from database import get_db
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
